@@ -23,6 +23,16 @@ npm run capture
 4. 结果或解析出现后回到终端按 Enter，脚本会补充答案和解析。
 5. 继续下一轮，直到连续多轮没有新增题目，或在终端输入 `q` 结束。
 
+## 自动监听采集
+
+如果你想自己在浏览器里连续操作，让脚本一直在旁边自动整理：
+
+```powershell
+npm run watch
+```
+
+浏览器打开后手动登录。之后你只需要在页面里点击开始答题、翻页、提交或重新进入下一组题，脚本会每隔几秒自动抓取当前页面和相关接口数据，并持续更新 Word。
+
 ## 导出
 
 采集过程中会自动导出：
@@ -47,3 +57,4 @@ node scripts/capture-xisi.mjs --url "考试入口URL" --stale-rounds 5 --max-rou
 - `--stale-rounds`：连续多少轮没有新增题后停止，默认 `4`。
 - `--max-rounds`：最多采集多少轮，默认不限制。
 - `--export-only`：只用 `question_bank.json` 重新生成 Word。
+- `--watch`：自动监听模式，不需要每轮回终端按 Enter。

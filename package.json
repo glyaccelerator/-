@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "capture": "node scripts/capture-xisi.mjs",
+    "watch": "node scripts/capture-xisi.mjs --watch",
     "export": "node scripts/capture-xisi.mjs --export-only",
     "install-browsers": "npx playwright install chromium"
   },

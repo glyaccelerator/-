@@ -28,6 +28,7 @@ const config = {
   staleRounds: toPositiveInt(args["stale-rounds"], 4),
   maxRounds: args["max-rounds"] ? toPositiveInt(args["max-rounds"], 0) : 0,
   exportOnly: Boolean(args["export-only"]),
+  watch: Boolean(args.watch),
 };
 
 const answerKeys = new Set([
@@ -92,6 +93,12 @@ async function main() {
   context.on("page", (newPage) => attachResponseCollector(newPage, pendingPayloads));
 
   await page.goto(config.url, { waitUntil: "domcontentloaded" });
+
+  if (config.watch) {
+    await runWatchMode(context, page, pendingPayloads, bank);
+    return;
+  }
+
   console.log("浏览器已打开。请手动登录，并进入 10 题页面。");
   await ask(rl, "题目加载完成后按 Enter 开始采集本轮题目；输入 q 退出：");
 
@@ -149,6 +156,73 @@ async function main() {
   rl.close();
   log("capture finished");
   console.log(`\n完成。题库：${DOCX_FILE}`);
+}
+
+async function runWatchMode(context, page, pendingPayloads, bank) {
+  console.log("自动监听模式已启动。请在打开的浏览器中手动登录并操作题目页面。");
+  console.log("脚本会自动点击明显的“开始答题/继续答题”按钮，并持续导出 Word。按 Ctrl+C 结束。");
+  log("watch mode started");
+
+  let round = 1;
+  let idleTicks = 0;
+
+  const stop = async () => {
+    await saveAndExport(bank);
+    await context.close().catch(() => {});
+    log("watch mode stopped");
+    console.log(`\n已保存：${DOCX_FILE}`);
+    process.exit(0);
+  };
+  process.once("SIGINT", stop);
+  process.once("SIGTERM", stop);
+
+  while (true) {
+    await maybeClickStart(page);
+    const questions = await collectRound(page, pendingPayloads, round, "watch");
+    const result = mergeQuestions(bank, questions);
+    if (result.added || result.updated) {
+      idleTicks = 0;
+      logRound(round, "watch", result);
+      await saveAndExport(bank);
+      console.log(
+        `[第 ${round} 次扫描] 新增 ${result.added}，更新 ${result.updated}，累计 ${bank.questions.length} 题。`
+      );
+    } else {
+      idleTicks += 1;
+      if (idleTicks % 6 === 0) {
+        console.log(`[监听中] 当前累计 ${bank.questions.length} 题，最近没有发现新题。`);
+      }
+    }
+    round += 1;
+    await page.waitForTimeout(5000);
+  }
+}
+
+async function maybeClickStart(page) {
+  const labels = [
+    "开始答题",
+    "开始考试",
+    "进入考试",
+    "继续答题",
+    "继续考试",
+    "立即开始",
+    "去答题",
+  ];
+
+  for (const label of labels) {
+    const locator = page.getByText(label, { exact: false }).first();
+    try {
+      if (await locator.isVisible({ timeout: 300 })) {
+        await locator.click({ timeout: 1500 });
+        log(`clicked ${label}`);
+        await page.waitForTimeout(1500);
+        return true;
+      }
+    } catch {
+      // The page may rerender while probing; continue with the next label.
+    }
+  }
+  return false;
 }
 
 function attachResponseCollector(page, pendingPayloads) {
